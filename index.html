@@ -31,6 +31,7 @@
       background: var(--bg);
       color: var(--text);
       line-height: 1.4;
+      padding-bottom: 32px;
     }
 
     .page {
@@ -53,7 +54,7 @@
     }
 
     .subtitle {
-      margin: 0 0 22px;
+      margin: 0 0 18px;
       color: var(--muted);
     }
 
@@ -270,6 +271,14 @@
       font-size: 14px;
     }
 
+    .made-credit {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+      opacity: 0.85;
+    }
+
     @media (max-width: 760px) {
       .page {
         padding: 10px;
@@ -349,7 +358,7 @@
       <div class="items" id="itemsBody" aria-label="Список элементов оценки"></div>
 
       <div class="actions">
-        <button class="primary" id="addRowBtn" type="button" onclick="addRowFromButton()">Добавить элемент</button>
+        <button class="primary" id="addRowBtn" type="button" onclick="addRow()">Добавить элемент</button>
         <button class="secondary" id="fillExampleBtn" type="button" onclick="fillExample()">Пример</button>
         <button class="danger" id="clearBtn" type="button" onclick="clearAll()">Очистить</button>
       </div>
@@ -388,8 +397,9 @@
       <div class="message" id="message"></div>
 
       <p class="small-note">
-        Данные сохраняются в браузере автоматически, если это разрешено. Дробные числа можно вводить через точку или запятую. На телефоне открывайте файл <strong>index.html</strong> через браузер.
+        Данные сохраняются в браузере автоматически, если это разрешено. Дробные числа можно вводить через точку или запятую.
       </p>
+      <div class="made-credit">made: @SsorixS</div>
     </section>
   </main>
 
@@ -410,15 +420,19 @@
   </datalist>
 
   <script>
-    var STORAGE_KEY = 'grade-calculator-items-v5-mobile';
+    var STORAGE_KEY = 'grade-calculator-items-v6';
+    var SETTINGS_KEY = 'grade-calculator-settings-v3';
     var OLD_STORAGE_KEYS = [
+      'grade-calculator-items-v5-mobile',
       'grade-calculator-items-v4',
       'grade-calculator-items-v3',
       'grade-calculator-items-v2',
       'grade-calculator-items-v1'
     ];
-    var SETTINGS_KEY = 'grade-calculator-settings-v2-mobile';
-    var OLD_SETTINGS_KEYS = ['grade-calculator-settings-v1'];
+    var OLD_SETTINGS_KEYS = [
+      'grade-calculator-settings-v2-mobile',
+      'grade-calculator-settings-v1'
+    ];
     var MAX_DECIMALS = 5;
     var EPSILON = 1e-10;
 
@@ -461,7 +475,6 @@
         if (window.localStorage) localStorage.setItem(key, value);
       } catch (error) {
         // На некоторых телефонах localStorage может быть недоступен для локальных файлов.
-        // Калькулятор всё равно продолжит работать, просто без автосохранения.
       }
     }
 
@@ -477,9 +490,7 @@
           if (Array.isArray(parsed) && parsed.length > 0) {
             return parsed.map(normalizeItem);
           }
-        } catch (error) {
-          // пропускаем повреждённые данные
-        }
+        } catch (error) {}
       }
 
       return [{ name: '', weight: '', score: '' }];
@@ -495,12 +506,10 @@
         try {
           var parsed = JSON.parse(saved);
           return {
-            threshold: parsed && parsed.threshold !== undefined ? parsed.threshold : defaultSettings.threshold,
-            unknownIndex: parsed && parsed.unknownIndex !== undefined ? parsed.unknownIndex : defaultSettings.unknownIndex
+            threshold: parsed && parsed.threshold !== undefined ? String(parsed.threshold) : defaultSettings.threshold,
+            unknownIndex: parsed && parsed.unknownIndex !== undefined ? String(parsed.unknownIndex) : defaultSettings.unknownIndex
           };
-        } catch (error) {
-          // пропускаем повреждённые настройки
-        }
+        } catch (error) {}
       }
 
       return {
@@ -511,9 +520,9 @@
 
     function normalizeItem(item) {
       return {
-        name: item && item.name !== undefined ? item.name : '',
-        weight: item && item.weight !== undefined ? item.weight : '',
-        score: item && item.score !== undefined ? item.score : ''
+        name: item && item.name !== undefined ? String(item.name) : '',
+        weight: item && item.weight !== undefined ? String(item.weight) : '',
+        score: item && item.score !== undefined ? String(item.score) : ''
       };
     }
 
@@ -525,57 +534,32 @@
       storageSet(SETTINGS_KEY, JSON.stringify(settings));
     }
 
-    function isBlank(value) {
-      return value === '' || value === null || value === undefined;
-    }
-
     function parseNumber(value) {
-      if (typeof value === 'number') return value;
-      if (isBlank(value)) return NaN;
-
-      var normalized = String(value).trim().replace(/,/g, '.');
-      if (normalized === '') return NaN;
-
-      return Number(normalized);
+      if (value === undefined || value === null) return null;
+      var text = String(value).trim().replace(',', '.');
+      if (text === '') return null;
+      var number = Number(text);
+      return Number.isFinite(number) ? number : null;
     }
 
-    function isValidWeight(value) {
-      var number = parseNumber(value);
-      return Number.isFinite(number) && number >= 0 && number <= 1;
-    }
-
-    function isValidScore(value) {
-      var number = parseNumber(value);
-      return Number.isFinite(number) && number >= 0 && number <= 10;
-    }
-
-    function isValidThreshold(value) {
-      var number = parseNumber(value);
-      return Number.isFinite(number) && number >= 0 && number <= 10;
-    }
-
-    function isInvalidWeight(value) {
-      return !isBlank(value) && !isValidWeight(value);
-    }
-
-    function isInvalidScore(value) {
-      return !isBlank(value) && !isValidScore(value);
-    }
-
-    function roundToMaxDecimals(value) {
-      if (!Number.isFinite(value)) return 0;
-      var multiplier = Math.pow(10, MAX_DECIMALS);
-      return Math.round((value + Number.EPSILON) * multiplier) / multiplier;
+    function roundNumber(value) {
+      var factor = Math.pow(10, MAX_DECIMALS);
+      return Math.round((value + EPSILON) * factor) / factor;
     }
 
     function formatNumber(value) {
-      var rounded = roundToMaxDecimals(value);
-      return rounded.toFixed(MAX_DECIMALS).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+      if (!Number.isFinite(value)) return '0';
+      var rounded = roundNumber(value);
+      var fixed = rounded.toFixed(MAX_DECIMALS);
+      return fixed.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
     }
 
-    function calculateRowContribution(item) {
-      if (!isValidWeight(item.weight) || !isValidScore(item.score)) return 0;
-      return parseNumber(item.weight) * parseNumber(item.score);
+    function escapeAttr(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
     }
 
     function getUnknownIndex() {
@@ -585,226 +569,265 @@
       return index;
     }
 
-    function getItemLabel(item, index) {
-      var name = String(item.name || '').trim();
+    function getItemName(index) {
+      var name = items[index] && items[index].name ? items[index].name.trim() : '';
       return name || 'Элемент ' + (index + 1);
     }
 
-    function escapeHtml(text) {
-      return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-
     function render() {
+      if (!Array.isArray(items) || items.length === 0) {
+        items = [{ name: '', weight: '', score: '' }];
+      }
+
+      passThresholdInput.value = settings.threshold || defaultSettings.threshold;
       itemsBody.innerHTML = '';
 
       for (var i = 0; i < items.length; i++) {
-        var item = items[i];
         var row = document.createElement('div');
         row.className = 'item-row';
-        row.dataset.index = String(i);
-        updateRowValidity(row, item);
-        row.classList.toggle('unknown-row', getUnknownIndex() === i);
-
-        row.innerHTML = '' +
-          '<div class="field">' +
-            '<label class="field-label">Элемент</label>' +
-            '<input type="text" aria-label="Название элемента" value="' + escapeHtml(item.name || '') + '" data-index="' + i + '" data-field="name" placeholder="Например: тест" oninput="handleItemInput(event)" />' +
+        row.setAttribute('data-index', String(i));
+        row.innerHTML =
+          '<div>' +
+            '<label>Элемент</label>' +
+            '<input type="text" value="' + escapeAttr(items[i].name) + '" data-index="' + i + '" data-field="name" placeholder="Например: кр 1" oninput="handleItemInput(this)" />' +
           '</div>' +
-          '<div class="field">' +
-            '<label class="field-label">Коэффициент</label>' +
-            '<input type="text" inputmode="decimal" aria-label="Коэффициент" value="' + escapeHtml(item.weight || '') + '" data-index="' + i + '" data-field="weight" list="coefficientOptions" placeholder="0.3" oninput="handleItemInput(event)" />' +
+          '<div>' +
+            '<label>Коэффициент</label>' +
+            '<input type="text" inputmode="decimal" list="coefficientOptions" value="' + escapeAttr(items[i].weight) + '" data-index="' + i + '" data-field="weight" placeholder="0.1" oninput="handleItemInput(this)" />' +
           '</div>' +
-          '<div class="field">' +
-            '<label class="field-label">Оценка</label>' +
-            '<input type="text" inputmode="decimal" aria-label="Оценка" value="' + escapeHtml(item.score || '') + '" data-index="' + i + '" data-field="score" placeholder="0–10" oninput="handleItemInput(event)" />' +
+          '<div>' +
+            '<label>Оценка</label>' +
+            '<input type="text" inputmode="decimal" value="' + escapeAttr(items[i].score) + '" data-index="' + i + '" data-field="score" placeholder="0-10" oninput="handleItemInput(this)" />' +
           '</div>' +
-          '<div class="field">' +
-            '<div class="field-label">Вклад</div>' +
-            '<div class="row-total">' + formatNumber(calculateRowContribution(item)) + '</div>' +
+          '<div>' +
+            '<label>Вклад</label>' +
+            '<div class="row-total" data-total-index="' + i + '">0</div>' +
           '</div>' +
-          '<div class="field">' +
-            '<div class="field-label">Удалить</div>' +
-            '<button class="danger delete-btn" type="button" data-delete="' + i + '" aria-label="Удалить элемент" onclick="deleteRowFromButton(' + i + ')">Удалить</button>' +
+          '<div>' +
+            '<label>Удалить</label>' +
+            '<button class="danger delete-btn" type="button" onclick="deleteRow(' + i + ')">Удалить</button>' +
           '</div>';
-
         itemsBody.appendChild(row);
       }
 
-      passThresholdInput.value = settings.threshold;
       updateUnknownOptions();
+      updateAllRows();
       updateSummary();
     }
 
-    function updateRowValidity(row, item) {
-      row.classList.toggle('invalid', isInvalidWeight(item.weight) || isInvalidScore(item.score));
-    }
-
-    function updateRow(row, item) {
-      updateRowValidity(row, item);
-      row.classList.toggle('unknown-row', getUnknownIndex() === Number(row.dataset.index));
-      var rowTotal = row.querySelector('.row-total');
-      if (rowTotal) rowTotal.textContent = formatNumber(calculateRowContribution(item));
-    }
-
     function updateUnknownOptions() {
-      var selected = getUnknownIndex();
-      unknownItemSelect.innerHTML = '<option value="">Не выбрано</option>';
+      var selected = settings.unknownIndex;
+      var index = selected === '' ? null : Number(selected);
+      if (index !== null && (!Number.isInteger(index) || index < 0 || index >= items.length)) {
+        selected = '';
+        settings.unknownIndex = '';
+        saveSettings();
+      }
 
+      unknownItemSelect.innerHTML = '<option value="">Не выбрано</option>';
       for (var i = 0; i < items.length; i++) {
         var option = document.createElement('option');
         option.value = String(i);
-        option.textContent = getItemLabel(items[i], i);
+        option.textContent = getItemName(i);
         unknownItemSelect.appendChild(option);
       }
+      unknownItemSelect.value = settings.unknownIndex;
 
-      if (selected === null) {
-        settings.unknownIndex = '';
-        unknownItemSelect.value = '';
-      } else {
-        unknownItemSelect.value = String(selected);
-      }
-
-      var rows = document.querySelectorAll('#itemsBody .item-row');
+      var rows = itemsBody.querySelectorAll('.item-row');
       for (var r = 0; r < rows.length; r++) {
-        rows[r].classList.toggle('unknown-row', getUnknownIndex() === Number(rows[r].dataset.index));
+        rows[r].classList.toggle('unknown-row', String(r) === settings.unknownIndex);
       }
     }
 
-    function getKnownTotalForUnknownCalculation(unknownIndex) {
-      var knownTotal = 0;
+    function handleItemInput(input) {
+      var index = Number(input.getAttribute('data-index'));
+      var field = input.getAttribute('data-field');
+      if (!Number.isInteger(index) || !field || !items[index]) return;
 
-      for (var i = 0; i < items.length; i++) {
-        if (i === unknownIndex) continue;
-        if (isValidWeight(items[i].weight) && isValidScore(items[i].score)) {
-          knownTotal += parseNumber(items[i].weight) * parseNumber(items[i].score);
+      items[index][field] = input.value;
+      saveItems();
+
+      if (field === 'name') {
+        updateUnknownOptions();
+      }
+
+      var row = input.closest ? input.closest('.item-row') : null;
+      if (row) updateRow(index, row);
+      updateSummary();
+    }
+
+    function handleThresholdInput() {
+      settings.threshold = passThresholdInput.value;
+      saveSettings();
+      updateSummary();
+    }
+
+    function handleUnknownChange() {
+      settings.unknownIndex = unknownItemSelect.value;
+      saveSettings();
+      updateUnknownOptions();
+      updateAllRows();
+      updateSummary();
+    }
+
+    function updateAllRows() {
+      var rows = itemsBody.querySelectorAll('.item-row');
+      for (var i = 0; i < rows.length; i++) {
+        updateRow(i, rows[i]);
+      }
+    }
+
+    function updateRow(index, row) {
+      var item = items[index];
+      var weight = parseNumber(item.weight);
+      var score = parseNumber(item.score);
+      var unknownIndex = getUnknownIndex();
+      var weightInvalid = item.weight.trim() !== '' && (weight === null || weight < 0 || weight > 1);
+      var scoreInvalid = item.score.trim() !== '' && (score === null || score < 0 || score > 10);
+      var totalEl = row.querySelector('[data-total-index="' + index + '"]');
+
+      row.classList.toggle('invalid', weightInvalid || scoreInvalid);
+      row.classList.toggle('unknown-row', unknownIndex === index);
+
+      if (totalEl) {
+        if (unknownIndex === index) {
+          totalEl.textContent = 'неизвестно';
+        } else if (weight !== null && score !== null && !weightInvalid && !scoreInvalid) {
+          totalEl.textContent = formatNumber(weight * score);
+        } else {
+          totalEl.textContent = '0';
         }
       }
-
-      return knownTotal;
     }
 
-    function updateSummary() {
+    function calculate() {
+      var unknownIndex = getUnknownIndex();
       var total = 0;
       var weightSum = 0;
-      var hasInvalidValues = false;
+      var invalidCount = 0;
 
       for (var i = 0; i < items.length; i++) {
         var item = items[i];
+        var weight = parseNumber(item.weight);
+        var score = parseNumber(item.score);
+        var weightInvalid = item.weight.trim() !== '' && (weight === null || weight < 0 || weight > 1);
+        var scoreInvalid = item.score.trim() !== '' && (score === null || score < 0 || score > 10);
 
-        if (isValidWeight(item.weight)) {
-          weightSum += parseNumber(item.weight);
-        }
+        if (weightInvalid || scoreInvalid) invalidCount++;
+        if (weight !== null && weight >= 0 && weight <= 1) weightSum += weight;
 
-        if (isValidWeight(item.weight) && isValidScore(item.score)) {
-          total += parseNumber(item.weight) * parseNumber(item.score);
-        }
-
-        if (isInvalidWeight(item.weight) || isInvalidScore(item.score)) {
-          hasInvalidValues = true;
+        if (unknownIndex === i) continue;
+        if (weight !== null && score !== null && !weightInvalid && !scoreInvalid) {
+          total += weight * score;
         }
       }
 
-      var threshold = parseNumber(settings.threshold);
-      var thresholdIsValid = isValidThreshold(settings.threshold);
-      var unknownIndex = getUnknownIndex();
+      return {
+        total: total,
+        weightSum: weightSum,
+        invalidCount: invalidCount,
+        unknownIndex: unknownIndex
+      };
+    }
 
-      totalScoreEl.textContent = formatNumber(total);
-      totalPercentEl.textContent = formatNumber((total / 10) * 100) + '%';
-      weightSumEl.textContent = formatNumber(weightSum);
-      thresholdValueEl.textContent = thresholdIsValid ? formatNumber(threshold) : 'Ошибка';
-      progressBar.style.width = Math.min(Math.max(total / 10, 0), 1) * 100 + '%';
-
-      passThresholdInput.classList.toggle('invalid-field', !isBlank(settings.threshold) && !thresholdIsValid);
-
-      if (!thresholdIsValid) {
-        attestationStatusEl.innerHTML = '<span class="danger-text">Введите порог 0–10</span>';
-      } else if (total + EPSILON >= threshold) {
-        attestationStatusEl.innerHTML = '<span class="ok-text">Аттестован</span>';
-      } else {
-        attestationStatusEl.innerHTML = '<span class="danger-text">Не аттестован</span>';
-      }
-
-      updateNeededScore(threshold, thresholdIsValid, unknownIndex);
-
+    function updateSummary() {
+      var result = calculate();
+      var threshold = parseNumber(passThresholdInput.value);
+      var thresholdInvalid = passThresholdInput.value.trim() !== '' && (threshold === null || threshold < 0 || threshold > 10);
       var messages = [];
-      if (!thresholdIsValid) {
-        messages.push('Порог аттестации должен быть числом от 0 до 10. Базовое значение — 3.5.');
-      }
-      if (hasInvalidValues) {
-        messages.push('Коэффициенты должны быть числами от 0 до 1, а оценки — числами от 0 до 10. Пустые оценки считаются как 0 до ввода значения.');
-      }
-      if (weightSum > 1 + EPSILON) {
-        messages.push('Сумма коэффициентов больше 1, поэтому итоговая оценка может выйти за максимум. Уменьшите коэффициенты.');
-      } else if (weightSum < 1 - EPSILON) {
-        messages.push('Сумма коэффициентов меньше 1. Осталось распределить: ' + formatNumber(1 - weightSum) + '.');
-      } else {
-        messages.push('<span class="ok-text">Сумма коэффициентов равна 1. Всё готово.</span>');
+
+      passThresholdInput.classList.toggle('invalid-field', thresholdInvalid);
+
+      totalScoreEl.textContent = formatNumber(result.total);
+      totalPercentEl.textContent = formatNumber((result.total / 10) * 100) + '%';
+      weightSumEl.textContent = formatNumber(result.weightSum);
+      thresholdValueEl.textContent = threshold !== null && !thresholdInvalid ? formatNumber(threshold) : 'Ошибка';
+
+      var progressPercent = Math.max(0, Math.min(100, (result.total / 10) * 100));
+      progressBar.style.width = progressPercent + '%';
+
+      if (thresholdInvalid) {
+        attestationStatusEl.textContent = 'Введите порог от 0 до 10';
+        attestationStatusEl.className = 'summary-value small danger-text';
+        neededScoreEl.textContent = 'Введите порог';
+      } else if (threshold === null) {
+        threshold = 3.5;
+        thresholdValueEl.textContent = '3.5';
       }
 
-      messageEl.innerHTML = messages.join('<br>');
+      if (!thresholdInvalid && threshold !== null) {
+        if (result.unknownIndex === null) {
+          neededScoreEl.textContent = 'Выберите элемент';
+          if (result.total + EPSILON >= threshold) {
+            attestationStatusEl.textContent = 'Аттестован';
+            attestationStatusEl.className = 'summary-value small ok-text';
+          } else {
+            attestationStatusEl.textContent = 'Не аттестован';
+            attestationStatusEl.className = 'summary-value small danger-text';
+          }
+        } else {
+          var unknown = items[result.unknownIndex];
+          var unknownWeight = parseNumber(unknown.weight);
+          var unknownWeightInvalid = unknown.weight.trim() !== '' && (unknownWeight === null || unknownWeight <= 0 || unknownWeight > 1);
+
+          if (unknownWeight === null || unknownWeightInvalid || unknownWeight <= 0) {
+            neededScoreEl.textContent = 'Введите коэффициент';
+            attestationStatusEl.textContent = 'Неизвестный элемент без коэффициента';
+            attestationStatusEl.className = 'summary-value small danger-text';
+          } else {
+            var needed = (threshold - result.total) / unknownWeight;
+
+            if (needed <= 0) {
+              neededScoreEl.textContent = 'Уже достаточно';
+              attestationStatusEl.textContent = 'Аттестован уже';
+              attestationStatusEl.className = 'summary-value small ok-text';
+            } else if (needed > 10 + EPSILON) {
+              neededScoreEl.textContent = formatNumber(needed) + ' из 10';
+              attestationStatusEl.textContent = 'Невозможно: нужно больше 10';
+              attestationStatusEl.className = 'summary-value small danger-text';
+            } else {
+              neededScoreEl.textContent = formatNumber(needed) + ' из 10';
+              attestationStatusEl.textContent = 'Можно аттестоваться';
+              attestationStatusEl.className = 'summary-value small ok-text';
+            }
+          }
+        }
+      }
+
+      if (result.weightSum > 1 + EPSILON) {
+        messages.push('Сумма коэффициентов больше 1. Уменьшите коэффициенты.');
+      } else if (result.weightSum < 1 - EPSILON) {
+        messages.push('Сумма коэффициентов меньше 1. Осталось: ' + formatNumber(1 - result.weightSum) + '.');
+      } else {
+        messages.push('Сумма коэффициентов равна 1.');
+      }
+
+      if (result.invalidCount > 0 || thresholdInvalid) {
+        messages.push('Проверьте поля: коэффициенты должны быть от 0 до 1, оценки и порог — от 0 до 10.');
+      }
+
+      messageEl.textContent = messages.join(' ');
       messageEl.classList.toggle('show', messages.length > 0);
     }
 
-    function updateNeededScore(threshold, thresholdIsValid, unknownIndex) {
-      if (!thresholdIsValid) {
-        neededScoreEl.innerHTML = '<span class="danger-text">Введите порог</span>';
-        return;
-      }
-
-      if (unknownIndex === null) {
-        neededScoreEl.textContent = 'Выберите элемент';
-        return;
-      }
-
-      var unknownItem = items[unknownIndex];
-      var unknownWeight = parseNumber(unknownItem.weight);
-
-      if (!isValidWeight(unknownItem.weight) || unknownWeight <= 0) {
-        neededScoreEl.innerHTML = '<span class="danger-text">Нужен коэффициент &gt; 0</span>';
-        return;
-      }
-
-      var knownTotal = getKnownTotalForUnknownCalculation(unknownIndex);
-      var needed = (threshold - knownTotal) / unknownWeight;
-      var roundedNeeded = roundToMaxDecimals(needed);
-
-      if (needed <= 0 + EPSILON) {
-        neededScoreEl.innerHTML = '<span class="ok-text">Уже хватает</span>';
-      } else if (needed <= 10 + EPSILON) {
-        neededScoreEl.textContent = formatNumber(roundedNeeded) + ' из 10';
-      } else {
-        neededScoreEl.innerHTML = '<span class="danger-text">' + formatNumber(roundedNeeded) + ' из 10 — невозможно</span>';
-      }
-    }
-
-    function addRow(item) {
-      var row = item || { name: '', weight: '', score: '' };
-      items.push(row);
+    function addRow() {
+      items.push({ name: '', weight: '', score: '' });
       saveItems();
       render();
 
-      // После добавления ставим курсор в название нового элемента, если браузер разрешает.
-      setTimeout(function () {
-        var lastInput = document.querySelector('#itemsBody .item-row:last-child input[data-field="name"]');
-        if (lastInput && typeof lastInput.focus === 'function') lastInput.focus();
-      }, 0);
+      var rows = itemsBody.querySelectorAll('.item-row');
+      var lastRow = rows[rows.length - 1];
+      if (lastRow) {
+        var firstInput = lastRow.querySelector('input[data-field="name"]');
+        if (firstInput && firstInput.focus) firstInput.focus();
+      }
     }
 
-    function addRowFromButton() {
-      addRow();
-      return false;
-    }
-
-    function deleteRowFromButton(index) {
+    function deleteRow(index) {
       var removedIndex = Number(index);
-      if (!Number.isInteger(removedIndex) || removedIndex < 0 || removedIndex >= items.length) return false;
-
       var currentUnknownIndex = getUnknownIndex();
+
+      if (!Number.isInteger(removedIndex) || removedIndex < 0 || removedIndex >= items.length) return;
 
       items.splice(removedIndex, 1);
       if (items.length === 0) items.push({ name: '', weight: '', score: '' });
@@ -820,55 +843,17 @@
       saveItems();
       saveSettings();
       render();
-      return false;
-    }
-
-    function handleItemInput(event) {
-      var input = event.target;
-      var index = Number(input.dataset.index);
-      var field = input.dataset.field;
-      if (!Number.isInteger(index) || !field || !items[index]) return;
-
-      items[index][field] = input.value;
-      saveItems();
-
-      var row = input.closest ? input.closest('.item-row') : null;
-      if (row) updateRow(row, items[index]);
-
-      if (field === 'name') {
-        updateUnknownOptions();
-      }
-
-      updateSummary();
-    }
-
-    function handleUnknownChange() {
-      settings.unknownIndex = unknownItemSelect.value;
-      saveSettings();
-      updateUnknownOptions();
-      updateSummary();
-    }
-
-    function handleThresholdInput() {
-      settings.threshold = passThresholdInput.value;
-      saveSettings();
-      updateSummary();
     }
 
     function fillExample() {
       items = [];
       for (var i = 0; i < defaultItems.length; i++) {
-        items.push({
-          name: defaultItems[i].name,
-          weight: defaultItems[i].weight,
-          score: defaultItems[i].score
-        });
+        items.push(normalizeItem(defaultItems[i]));
       }
       settings.unknownIndex = '';
       saveItems();
       saveSettings();
       render();
-      return false;
     }
 
     function clearAll() {
@@ -880,17 +865,7 @@
       saveItems();
       saveSettings();
       render();
-      return false;
     }
-
-    // Делаем функции явно доступными для onclick на телефонах и старых браузерах.
-    window.addRowFromButton = addRowFromButton;
-    window.deleteRowFromButton = deleteRowFromButton;
-    window.handleItemInput = handleItemInput;
-    window.handleUnknownChange = handleUnknownChange;
-    window.handleThresholdInput = handleThresholdInput;
-    window.fillExample = fillExample;
-    window.clearAll = clearAll;
 
     render();
   </script>
